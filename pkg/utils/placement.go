@@ -83,9 +83,25 @@ func PlaceByGenericPlacmentFields(kubeclient client.Client, placement appv1alpha
 		return nil, err
 	}
 
+	intermediateHubList := &spokeClusterV1.ManagedClusterList{}
+	intermediateHubLabelSelector := &metav1.LabelSelector{ MatchLabels: map[string]string{ "hub.open-cluster-management.io": "true" }}
+
+	intermediateHubSelector, err := ConvertLabels(intermediateHubLabelSelector)
+
+	if err != nil {
+		return nil, err
+	}
+
+	err = kubeclient.List(context.TODO(), intermediateHubList, &client.ListOptions{LabelSelector: intermediateHubSelector})
+
+	if err != nil && !errors.IsNotFound(err) {
+		klog.Error("Listing clusters and found error: ", err)
+		return nil, err
+	}
+
 	klog.V(2).Infof("listed clusters count: %v, items: %v ", len(cllist.Items), cllist.Items)
 
-	for _, cl := range cllist.Items {
+	for _, cl := range append(cllist.Items, intermediateHubList.Items...) {
 		// the cluster will not be returned if it is in terminating process
 		if cl.DeletionTimestamp != nil && !cl.DeletionTimestamp.IsZero() {
 			continue
